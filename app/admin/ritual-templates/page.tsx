@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { upsertRitualTemplate, getCurrentAdmin } from '@/lib/actions';
+import SubmitButton from '@/app/admin/_components/SubmitButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,7 @@ export default async function RitualTemplatesPage() {
                 <label className="label">Taboos</label>
                 <textarea name="taboos" defaultValue={existing?.taboos ?? ''} rows={2} className="input" />
               </div>
-              <button type="submit" className="btn-secondary">Save</button>
+              <SubmitButton className="btn-secondary" pendingText="Saving…">Save</SubmitButton>
             </form>
           </details>
         );

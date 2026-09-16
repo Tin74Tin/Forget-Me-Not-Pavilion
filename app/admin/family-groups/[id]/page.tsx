@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { addFacilityRenewal, addFamilyMember, setupFamilyWideObservances } from '@/lib/actions';
+import SubmitButton from '@/app/admin/_components/SubmitButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export default async function FamilyGroupDetailPage({ params }: { params: Promis
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-medium">Family-wide occasions</h2>
           <form action={boundSetup}>
-            <button type="submit" className="btn-secondary">Set up CNY / Zhongyuan / Qingming / Winter Solstice</button>
+            <SubmitButton className="btn-secondary" pendingText="Setting up…">Set up CNY / Zhongyuan / Qingming / Winter Solstice</SubmitButton>
           </form>
         </div>
         {!familyWideInstances || familyWideInstances.length === 0 ? (
@@ -124,7 +125,7 @@ export default async function FamilyGroupDetailPage({ params }: { params: Promis
               <label htmlFor="digest_mode" className="text-sm text-stone-700">Bundle same-day reminders into one digest message</label>
             </div>
             <div className="col-span-2">
-              <button type="submit" className="btn">Add member</button>
+              <SubmitButton pendingText="Adding…">Add member</SubmitButton>
             </div>
           </form>
         </details>
@@ -152,7 +153,14 @@ export default async function FamilyGroupDetailPage({ params }: { params: Promis
                         Died lunar {a.dod_lunar_month}/{a.dod_lunar_day}{a.dod_is_leap ? ' (leap month)' : ''}
                         {a.dod_is_approximate ? ' · approximate' : ''} — {a.dod_solar_reference}
                       </p>
-                      {a.resting_place && <p className="text-xs text-stone-500">{a.resting_place}</p>}
+                      {a.resting_place && (
+                        <p className="text-xs text-stone-500">
+                          {a.resting_place}{a.niche_number ? ` — ${a.niche_number}` : ''}
+                        </p>
+                      )}
+                      {a.tablet_location && (
+                        <p className="text-xs text-stone-500">Tablet: {a.tablet_location}</p>
+                      )}
                     </div>
                   </div>
 
@@ -179,7 +187,7 @@ export default async function FamilyGroupDetailPage({ params }: { params: Promis
                       </div>
                       <input name="fee_amount" type="number" step="0.01" placeholder="Fee amount (optional)" className="input" />
                       <input name="payment_notes" placeholder="Payment notes (optional)" className="input" />
-                      <button type="submit" className="btn-secondary col-span-2">Add renewal reminder</button>
+                      <SubmitButton className="btn-secondary col-span-2" pendingText="Adding…">Add renewal reminder</SubmitButton>
                     </form>
                   </details>
                 </li>

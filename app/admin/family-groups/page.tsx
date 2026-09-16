@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { createFamilyGroup } from '@/lib/actions';
+import SubmitButton from '@/app/admin/_components/SubmitButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,7 +108,7 @@ export default async function FamilyGroupsPage({
             <label className="label" htmlFor="default_send_time_local">Default send time (D-day)</label>
             <input id="default_send_time_local" name="default_send_time_local" type="time" className="input" defaultValue="08:00" />
           </div>
-          <button type="submit" className="btn">Create family group</button>
+          <SubmitButton pendingText="Creating…">Create family group</SubmitButton>
         </form>
       </div>
     </div>

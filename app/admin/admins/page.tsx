@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentAdmin, inviteAdmin, removeAdmin } from '@/lib/actions';
 import type { AdminUser } from '@/lib/types';
 import RoleSelect from './RoleSelect';
+import SubmitButton from '@/app/admin/_components/SubmitButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +73,7 @@ export default async function AdminsPage() {
               <option value="super_admin">Super admin — full access</option>
             </select>
           </div>
-          <button type="submit" className="btn">Add admin</button>
+          <SubmitButton pendingText="Adding…">Add admin</SubmitButton>
         </form>
       </div>
     </div>
