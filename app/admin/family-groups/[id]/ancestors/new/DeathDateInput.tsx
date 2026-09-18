@@ -8,9 +8,9 @@ import { lunarToSolar, solarToLunar, formatISO } from '@/lib/lunar';
 // ancestors) only know the lunar date. Whichever is entered, the other is
 // computed live, demonstrating the lunar<->solar conversion the whole app
 // is built around.
-export default function DeathDateInput() {
+export default function DeathDateInput({ initialSolarISO }: { initialSolarISO?: string } = {}) {
   const [mode, setMode] = useState<'solar' | 'lunar'>('solar');
-  const [solarDate, setSolarDate] = useState('');
+  const [solarDate, setSolarDate] = useState(initialSolarISO ?? '');
   const [lunarYear, setLunarYear] = useState('');
   const [lunarMonth, setLunarMonth] = useState('');
   const [lunarDay, setLunarDay] = useState('');

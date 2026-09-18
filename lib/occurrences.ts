@@ -76,6 +76,20 @@ export function computeNextOccurrence(
       return nextSolarTerm('清明', today);
     case 'WINTER_SOLSTICE':
       return nextSolarTerm('冬至', today);
+    case 'MING_DAN': {
+      // Birthday remembrance -- deliberately Gregorian, not lunar (unlike
+      // every other yearly type here): recurs on the ancestor's fixed
+      // birth month/day each year, same as an ordinary birthday would.
+      if (!ancestor || !ancestor.dob_solar) return null;
+      const dob = new Date(ancestor.dob_solar);
+      let year = today.getFullYear();
+      for (let i = 0; i < 2; i++) {
+        const candidate = new Date(year, dob.getMonth(), dob.getDate());
+        if (candidate >= stripTime(today)) return candidate;
+        year += 1;
+      }
+      return new Date(year, dob.getMonth(), dob.getDate());
+    }
     default:
       return null;
   }

@@ -129,6 +129,28 @@ export async function createFamilyGroup(formData: FormData) {
   redirect(`/admin/family-groups/${data.id}`);
 }
 
+/** Super-admin-only: correct a family group's own details in place. RLS
+ * also enforces this (only super_admin can UPDATE), so this check just
+ * gives a friendlier error than a raw DB denial. */
+export async function updateFamilyGroup(familyGroupId: string, formData: FormData) {
+  const supabase = await createClient();
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.role !== 'super_admin') throw new Error('Only a super_admin can edit a family group');
+
+  const name = String(formData.get('name') ?? '').trim();
+  const dialect = String(formData.get('dialect') ?? 'mandarin');
+  const default_send_time_local = String(formData.get('default_send_time_local') ?? '08:00');
+  if (!name) throw new Error('Family group name is required');
+
+  const { error } = await supabase
+    .from('family_groups')
+    .update({ name, dialect, default_send_time_local })
+    .eq('id', familyGroupId);
+  if (error) throw error;
+
+  revalidatePath(`/admin/family-groups/${familyGroupId}`);
+}
+
 /** Creates the standard family-wide occasions (CNY, Zhongyuan, Qingming, Winter Solstice, 初一/十五)
  * for a group — one instance per group, never per ancestor, per the de-duplication design. */
 export async function setupFamilyWideObservances(familyGroupId: string) {
@@ -193,6 +215,41 @@ export async function addFamilyMember(familyGroupId: string, formData: FormData)
   revalidatePath(`/admin/family-groups/${familyGroupId}`);
 }
 
+/** Super-admin-only: correct a family member's own details (name/contact)
+ * and their membership details (relationship/role) in place. */
+export async function updateFamilyMember(
+  memberId: string,
+  personId: string,
+  familyGroupId: string,
+  formData: FormData,
+) {
+  const supabase = await createClient();
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.role !== 'super_admin') throw new Error('Only a super_admin can edit a family member');
+
+  const name = String(formData.get('name') ?? '').trim();
+  const relationship = String(formData.get('relationship') ?? '').trim();
+  const role = String(formData.get('role') ?? 'member');
+  const contact_channel = String(formData.get('contact_channel') ?? 'whatsapp');
+  const contact_value = String(formData.get('contact_value') ?? '').trim();
+  const digest_mode = formData.get('digest_mode') === 'on';
+  if (!name || !contact_value) throw new Error('Name and contact are required');
+
+  const { error: personErr } = await supabase
+    .from('people')
+    .update({ name, contact_channel, contact_value, digest_mode })
+    .eq('id', personId);
+  if (personErr) throw personErr;
+
+  const { error: memberErr } = await supabase
+    .from('family_group_members')
+    .update({ relationship, role })
+    .eq('id', memberId);
+  if (memberErr) throw memberErr;
+
+  revalidatePath(`/admin/family-groups/${familyGroupId}`);
+}
+
 // --- Ancestors ----------------------------------------------------------------
 
 const MILESTONE_DAY_OFFSETS = [7, 14, 21, 28, 35, 42, 49]; // 頭七 ... 尾七/滿七
@@ -203,6 +260,9 @@ export async function createAncestor(familyGroupId: string, formData: FormData) 
   const name = String(formData.get('name') ?? '').trim();
   const tablet_name = String(formData.get('tablet_name') ?? '').trim() || null;
   const resting_place = String(formData.get('resting_place') ?? '').trim() || null;
+  const niche_number = String(formData.get('niche_number') ?? '').trim() || null;
+  const tablet_location = String(formData.get('tablet_location') ?? '').trim() || null;
+  const dob_solar = String(formData.get('dob_solar') ?? '').trim() || null;
   const dod_lunar_month = Number(formData.get('dod_lunar_month'));
   const dod_lunar_day = Number(formData.get('dod_lunar_day'));
   const dod_is_leap = formData.get('dod_is_leap') === 'on';
@@ -222,6 +282,9 @@ export async function createAncestor(familyGroupId: string, formData: FormData) 
       name,
       tablet_name,
       resting_place,
+      niche_number,
+      tablet_location,
+      dob_solar,
       dod_lunar_month,
       dod_lunar_day,
       dod_is_leap,
@@ -248,6 +311,21 @@ export async function createAncestor(familyGroupId: string, formData: FormData) 
     is_leap_month: dod_is_leap,
     lead_days: deathAnniv?.default_lead_days ?? [30, 14, 7, 3, 1, 0],
   });
+
+  // Optional: an annual birthday-remembrance reminder (冥誕), only set up if a
+  // birth date was given. Unlike every other yearly observance in this app,
+  // this one recurs on the fixed Gregorian month/day each year, not the
+  // lunar date -- per Tin's preference, since birthdays are normally kept by
+  // the Gregorian calendar even when death-related rites follow the lunar one.
+  if (dob_solar) {
+    const mingDan = byCode.get('MING_DAN');
+    await supabase.from('observance_instances').insert({
+      ancestor_id: ancestor.id,
+      family_group_id: familyGroupId,
+      type_code: 'MING_DAN',
+      lead_days: mingDan?.default_lead_days ?? [7, 3, 1, 0],
+    });
+  }
 
   if (formData.get('milestone_bai_ri') === 'on') {
     const t = byCode.get('BAI_RI');
@@ -300,6 +378,103 @@ export async function createAncestor(familyGroupId: string, formData: FormData) 
   redirect(`/admin/family-groups/${familyGroupId}`);
 }
 
+/** Super-admin-only: correct an ancestor's own details in place, including
+ * the date of death. Deliberately does NOT re-process the milestone
+ * checkboxes (百日/頭七.../對年/三年) — those were one-time setup actions when
+ * the ancestor was first added, and re-running them here on every edit
+ * would either silently do nothing (unique index) or need its own delete-
+ * and-recreate logic that isn't worth the complexity for a rarely-used
+ * correction screen. If the date of death changes, the recurring annual
+ * DEATH_ANNIV reminder is kept in sync so future reminders land on the
+ * corrected date; past milestone instances (already tied to the old date)
+ * are left alone. */
+export async function updateAncestor(ancestorId: string, familyGroupId: string, formData: FormData) {
+  const supabase = await createClient();
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.role !== 'super_admin') throw new Error('Only a super_admin can edit an ancestor');
+
+  const name = String(formData.get('name') ?? '').trim();
+  const tablet_name = String(formData.get('tablet_name') ?? '').trim() || null;
+  const resting_place = String(formData.get('resting_place') ?? '').trim() || null;
+  const niche_number = String(formData.get('niche_number') ?? '').trim() || null;
+  const tablet_location = String(formData.get('tablet_location') ?? '').trim() || null;
+  const dob_solar = String(formData.get('dob_solar') ?? '').trim() || null;
+  const dod_lunar_month = Number(formData.get('dod_lunar_month'));
+  const dod_lunar_day = Number(formData.get('dod_lunar_day'));
+  const dod_is_leap = formData.get('dod_is_leap') === 'on';
+  const dod_solar_reference = String(formData.get('dod_solar_reference') ?? '');
+  const dod_is_approximate = formData.get('dod_is_approximate') === 'on';
+  const leap_month_handling = String(formData.get('leap_month_handling') ?? 'observe_in_following_month');
+  const observance_offset_days = Number(formData.get('observance_offset_days') ?? 0);
+
+  if (!name || !dod_lunar_month || !dod_lunar_day || !dod_solar_reference) {
+    throw new Error('Name and date of death are required');
+  }
+
+  const { error } = await supabase
+    .from('ancestors')
+    .update({
+      name,
+      tablet_name,
+      resting_place,
+      niche_number,
+      tablet_location,
+      dob_solar,
+      dod_lunar_month,
+      dod_lunar_day,
+      dod_is_leap,
+      dod_solar_reference,
+      dod_is_approximate,
+      leap_month_handling,
+      observance_offset_days,
+    })
+    .eq('id', ancestorId);
+  if (error) throw error;
+
+  // Keep the recurring death-anniversary reminder's date in step with any change above.
+  await supabase
+    .from('observance_instances')
+    .update({ lunar_month: dod_lunar_month, lunar_day: dod_lunar_day, is_leap_month: dod_is_leap })
+    .eq('ancestor_id', ancestorId)
+    .eq('type_code', 'DEATH_ANNIV');
+
+  // Keep the optional birthday-remembrance reminder (冥誕) in sync: create it
+  // if a birth date was just added, or remove it if the birth date was
+  // cleared. No "update" case is needed beyond that -- its date is read
+  // live from ancestors.dob_solar each time it's computed, not stored again
+  // on the instance itself.
+  if (dob_solar) {
+    const { data: existingMingDan } = await supabase
+      .from('observance_instances')
+      .select('id')
+      .eq('ancestor_id', ancestorId)
+      .eq('type_code', 'MING_DAN')
+      .maybeSingle();
+    if (!existingMingDan) {
+      const { data: mingDanType } = await supabase
+        .from('observance_types')
+        .select('*')
+        .eq('code', 'MING_DAN')
+        .single();
+      await supabase.from('observance_instances').insert({
+        ancestor_id: ancestorId,
+        family_group_id: familyGroupId,
+        type_code: 'MING_DAN',
+        lead_days: mingDanType?.default_lead_days ?? [7, 3, 1, 0],
+      });
+    }
+  } else {
+    await supabase
+      .from('observance_instances')
+      .delete()
+      .eq('ancestor_id', ancestorId)
+      .eq('type_code', 'MING_DAN');
+  }
+
+  revalidatePath(`/admin/family-groups/${familyGroupId}`);
+  redirect(`/admin/family-groups/${familyGroupId}`);
+}
+
 // --- Facility renewals ---------------------------------------------------------
 
 export async function addFacilityRenewal(ancestorId: string, familyGroupId: string, formData: FormData) {
@@ -327,6 +502,33 @@ export async function addFacilityRenewal(ancestorId: string, familyGroupId: stri
     fee_amount,
     payment_notes,
   });
+  if (error) throw error;
+
+  revalidatePath(`/admin/family-groups/${familyGroupId}`);
+}
+
+/** Super-admin-only: correct a facility/niche renewal reminder in place. */
+export async function updateFacilityRenewal(renewalId: string, familyGroupId: string, formData: FormData) {
+  const supabase = await createClient();
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.role !== 'super_admin') throw new Error('Only a super_admin can edit a renewal reminder');
+
+  const facility_name = String(formData.get('facility_name') ?? '').trim();
+  const provider_contact = String(formData.get('provider_contact') ?? '').trim() || null;
+  const renewal_basis = String(formData.get('renewal_basis') ?? 'solar');
+  const renewal_month = Number(formData.get('renewal_month'));
+  const renewal_day = Number(formData.get('renewal_day'));
+  const fee_amount = formData.get('fee_amount') ? Number(formData.get('fee_amount')) : null;
+  const payment_notes = String(formData.get('payment_notes') ?? '').trim() || null;
+
+  if (!facility_name || !renewal_month || !renewal_day) {
+    throw new Error('Facility name and renewal month/day are required');
+  }
+
+  const { error } = await supabase
+    .from('facility_renewals')
+    .update({ facility_name, provider_contact, renewal_basis, renewal_month, renewal_day, fee_amount, payment_notes })
+    .eq('id', renewalId);
   if (error) throw error;
 
   revalidatePath(`/admin/family-groups/${familyGroupId}`);

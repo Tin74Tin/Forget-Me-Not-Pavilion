@@ -14,6 +14,7 @@ import {
 // Minimal shapes — match the DB columns we actually read.
 export interface AncestorRow {
   id: string;
+  dob_solar: string | null; // ISO date, optional -- powers MING_DAN only
   dod_lunar_month: number;
   dod_lunar_day: number;
   dod_is_leap: boolean;
@@ -135,6 +136,23 @@ export function computeNextOccurrence(
 
     case 'WINTER_SOLSTICE':
       return nextGregorianForSolarTerm('冬至', today);
+
+    case 'MING_DAN': {
+      // Birthday remembrance -- deliberately Gregorian, not lunar (unlike
+      // every other yearly type here): recurs on the ancestor's fixed
+      // birth month/day each year, same as an ordinary birthday would.
+      if (!ancestor || !ancestor.dob_solar) {
+        throw new Error('MING_DAN requires an ancestor with a recorded dob_solar');
+      }
+      const dob = new Date(ancestor.dob_solar);
+      let year = today.getFullYear();
+      for (let i = 0; i < 2; i++) {
+        const candidate = new Date(year, dob.getMonth(), dob.getDate());
+        if (candidate >= stripTime(today)) return candidate;
+        year += 1;
+      }
+      return new Date(year, dob.getMonth(), dob.getDate());
+    }
 
     default:
       throw new Error(`Unhandled observance type_code: ${instance.type_code}`);

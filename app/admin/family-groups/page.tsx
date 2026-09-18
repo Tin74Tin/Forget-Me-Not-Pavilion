@@ -90,7 +90,7 @@ export default async function FamilyGroupsPage({
         <h2 className="mb-3 font-medium">Add a family group</h2>
         <form action={createFamilyGroup} className="space-y-3">
           <div>
-            <label className="label" htmlFor="name">Family name</label>
+            <label className="label" htmlFor="name">Client name</label>
             <input id="name" name="name" required className="input" placeholder='e.g. "Tan family — paternal side"' />
           </div>
           <div>

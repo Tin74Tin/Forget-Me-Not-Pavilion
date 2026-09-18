@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createAncestor } from '@/lib/actions';
 import DeathDateInput from './DeathDateInput';
+import SubmitButton from '@/app/admin/_components/SubmitButton';
 
 export default async function NewAncestorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +20,15 @@ export default async function NewAncestorPage({ params }: { params: Promise<{ id
         <div>
           <label className="label" htmlFor="tablet_name">Tablet name (神主牌名, optional)</label>
           <input id="tablet_name" name="tablet_name" className="input" />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="dob_solar">Date of birth (optional)</label>
+          <input id="dob_solar" name="dob_solar" type="date" className="input" />
+          <p className="mt-1 text-xs text-stone-500">
+            If given, sets up an optional yearly 冥誕 (birthday remembrance) reminder on this Gregorian date — unlike
+            the date of death below, this one is not converted to the lunar calendar.
+          </p>
         </div>
 
         <div>
@@ -45,7 +55,7 @@ export default async function NewAncestorPage({ params }: { params: Promise<{ id
           <p className="mt-1 text-xs text-stone-500">e.g. -1 for families who observe 忌日 one day before the actual date (忌日提前).</p>
         </div>
 
-                <div>
+        <div>
           <label className="label" htmlFor="resting_place">Resting place</label>
           <input id="resting_place" name="resting_place" placeholder="Grave / columbarium name & address, or 'home altar'" className="input" />
         </div>
@@ -79,7 +89,7 @@ export default async function NewAncestorPage({ params }: { params: Promise<{ id
           <p className="mt-2 text-xs text-stone-500">These are one-time reminders — they fire once, then stop. The annual 忌日 is always set up automatically and continues indefinitely.</p>
         </fieldset>
 
-        <button type="submit" className="btn">Add ancestor</button>
+        <SubmitButton pendingText="Adding…">Add ancestor</SubmitButton>
       </form>
     </div>
   );
