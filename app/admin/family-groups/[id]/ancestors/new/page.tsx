@@ -77,7 +77,7 @@ export default async function NewAncestorPage({ params }: { params: Promise<{ id
               <input type="checkbox" name="milestone_bai_ri" /> 百日 (100th day)
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" name="milestone_qi_7" /> 頭七 through 尾七/滿七 (weekly through day 49)
+              <input type="checkbox" name="milestone_qi_7" defaultChecked /> 頭七 through 尾七/滿七 (weekly through day 49)
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" name="milestone_dui_nian" defaultChecked /> 對年 (first-year memorial)
